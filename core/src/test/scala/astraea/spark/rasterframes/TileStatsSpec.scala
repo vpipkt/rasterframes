@@ -19,11 +19,10 @@
 
 package astraea.spark.rasterframes
 
-
 import astraea.spark.rasterframes.TestData.randomTile
+import astraea.spark.rasterframes.TestData.fracTile
 import astraea.spark.rasterframes.stats.CellHistogram
 import geotrellis.raster._
-import geotrellis.raster.histogram.StreamingHistogram
 import geotrellis.spark._
 import geotrellis.raster.mapalgebra.local.{Max, Min}
 import org.apache.spark.sql.functions._
@@ -60,6 +59,26 @@ class TileStatsSpec extends TestEnvironment with TestData {
       df.repartition(4).createOrReplaceTempView("tmp")
       assert(sql("select dims.* from (select rf_tileDimensions(tile2) as dims from tmp)")
         .as[(Int, Int)].first() === (3, 3))
+    }
+
+    // tiles defined for the next few tests
+    val tile1 = fracTile(10, 10, 5)
+    val tile2 = ArrayTile(Array(-5, -4, -3, -2, -1, 0, 1, 2, 3), 3, 3)
+    val tile3 = randomTile(255, 255, IntCellType)
+    val ds = Seq[Tile](tile1, tile2, tile3).toDF("tiles")
+
+    it("should compute accurate item counts") {
+      val checkedValues = Seq[Double](0, 4, 7, 13, 26)
+      val result = checkedValues.map(x => ds.select(tileHistogram($"tiles")).first().itemCount(x))
+      forEvery(checkedValues) { x => assert((x == 0 && result.head == 4) || result.contains(x - 1)) }
+    }
+
+    it("Should compute quantiles"){
+      val numBreaks = 5
+      val breaks = ds.select(tileHistogram($"tiles")).map(_.quantileBreaks(numBreaks)).collect()
+      assert(breaks(1).length === numBreaks)
+      assert(breaks(0).apply(2) == 25)
+      assert(breaks(1).max <= 3 && breaks.apply(1).min >= -5)
     }
 
     it("should support local min/max") {
@@ -105,17 +124,31 @@ class TileStatsSpec extends TestEnvironment with TestData {
         .agg(sum("cells")).as[Long]
         .first()
       assert(resultTileStats === expectedData)
+
+      val (aggDC, aggNDC) = ds.select(aggStats($"tile")).select("dataCells", "noDataCells").as[(Long, Long)].first()
+      assert(aggDC === expectedData)
+      assert(aggNDC === expectedNoData)
     }
 
     it("should compute tile statistics") {
-      val ds = (Seq.fill[Tile](3)(randomTile(5, 5, FloatConstantNoDataCellType)) :+ null).toDS()
-      val means1 = ds.select(tileStats($"value")).map(s ⇒ Option(s).map(_.mean).getOrElse(0.0)).collect
-      val means2 = ds.select(tileMean($"value")).collect.map(m ⇒ if (m.isNaN) 0.0 else m)
-      // Compute the mean manually, knowing we're not dealing with no-data values.
-      val means = ds.select(tileToArray[Float]($"value")).map(a ⇒ if (a == null) 0.0 else a.sum / a.length).collect
+      withClue("mean") {
 
-      forAll(means.zip(means1)) { case (l, r) ⇒ assert(l === r +- 1e-6) }
-      forAll(means.zip(means2)) { case (l, r) ⇒ assert(l === r +- 1e-6) }
+        val ds = (Seq.fill[Tile](3)(randomTile(5, 5, FloatConstantNoDataCellType)) :+ null).toDS()
+        val means1 = ds.select(tileStats($"value")).map(s ⇒ Option(s).map(_.mean).getOrElse(0.0)).collect
+        val means2 = ds.select(tileMean($"value")).collect.map(m ⇒ if (m.isNaN) 0.0 else m)
+        // Compute the mean manually, knowing we're not dealing with no-data values.
+        val means = ds.select(tileToArray[Float]($"value")).map(a ⇒ if (a == null) 0.0 else a.sum / a.length).collect
+
+        forAll(means.zip(means1)) { case (l, r) ⇒ assert(l === r +- 1e-6) }
+        forAll(means.zip(means2)) { case (l, r) ⇒ assert(l === r +- 1e-6) }
+      }
+      withClue("sum") {
+        val rf = l8Sample(1).projectedRaster.toRF
+        val expected = 309149454 // computed with rasterio
+        val result = rf.agg(sum(tileSum($"tile"))).collect().head.getDouble(0)
+        logger.info(s"L8 sample band 1 grand total: ${result}")
+        assert(result === expected)
+      }
     }
 
     it("should compute per-tile histogram") {
@@ -131,7 +164,7 @@ class TileStatsSpec extends TestEnvironment with TestData {
       assert(r1.first.mean === r2.first.mean)
     }
 
-    it("foo") {
+    it("should compute mean and total count") {
       val tileSize = 5
       def rndTile = {
         val data = Array.fill(tileSize * tileSize)(scala.util.Random.nextGaussian())
@@ -140,9 +173,9 @@ class TileStatsSpec extends TestEnvironment with TestData {
 
       val rdd = spark.sparkContext.makeRDD(Seq((1, rndTile), (2, rndTile), (3, rndTile)))
       val h = rdd.histogram()
-      println(h.totalCount())
-      println(h.binCounts().map(_._2).sum)
-      println(h.asInstanceOf[StreamingHistogram].buckets().map(_._2).sum)
+
+      assert(h.totalCount() == math.pow(tileSize, 2) * 3)
+      assert(math.abs(h.mean().getOrElse((-100).toDouble)) < 3)
     }
 
     it("should compute aggregate histogram") {
