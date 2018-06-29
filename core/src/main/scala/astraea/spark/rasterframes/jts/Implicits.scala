@@ -74,6 +74,9 @@ trait Implicits extends SpatialConstructors {
 
     def at(time: Timestamp): TypedColumn[Any, Boolean] = (self === lit(time)).as[Boolean]
     def at(time: ZonedDateTime): TypedColumn[Any, Boolean] = at(time: Timestamp)
+    private def typedOr(left: TypedColumn[Any, Boolean], right: TypedColumn[Any, Boolean]): TypedColumn[Any, Boolean] = (left or right).as[Boolean]
+    def at(times: ZonedDateTime*): TypedColumn[Any, Boolean] =
+      times.map(t ⇒ at(t: Timestamp)).reduce(typedOr)
   }
 
   implicit class DateColumnMethods(val self: TypedColumn[Any, Date])
@@ -91,6 +94,11 @@ trait Implicits extends SpatialConstructors {
 
     def at(date: Date): TypedColumn[Any, Boolean] = (self === lit(date)).as[Boolean]
     def at(date: LocalDate): TypedColumn[Any, Boolean] = at(date: Date)
+
+    private def typedOr(left: TypedColumn[Any, Boolean], right: TypedColumn[Any, Boolean]): TypedColumn[Any, Boolean] = (left or right).as[Boolean]
+    def at(dates: Date*): TypedColumn[Any, Boolean] = dates.map(d ⇒ at(d)).reduce(typedOr)
+    // type erasure problem:
+//    def at(dates: LocalDate*): TypedColumn[Any, Boolean] = dates.map(d ⇒ at(d)).reduce(typedOr)
   }
 }
 
