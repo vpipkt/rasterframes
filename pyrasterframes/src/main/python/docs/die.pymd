@@ -1,0 +1,34 @@
+# Badness detector?
+
+```python
+a = 2
+a
+```
+
+assume some declaration of b is made but not able to complete for some wierd reason
+
+```python
+from japanese_breakfast import Rice
+b = Rice(a)
+```
+
+That will fail silently with probably import error. Next block will fail with NameError
+
+```python
+b * 23
+```
+
+Now try to see if things failed
+
+First for one that won't fail
+```python, echo=False, results='raw'
+try: a
+except NameError: print('@ref:[bad link](nonexistent_page.md)')
+```
+
+And now for one that will probably fail
+
+```python, echo=False, results='raw'
+try: b
+except NameError: print('@ref:[bad link](nonexistent_page.md)')
+```

@@ -38,13 +38,14 @@ The source code can be found on GitHub at [locationtech/rasterframes](https://gi
 @@@
 
 @@@ index
-* [Description](description.md)
-* [Getting Started](getting-started.md)
-* [Raster Data I/O](raster-io.md)
-* [Vector Data](vector-data.md)
-* [Raster Processing](raster-processing.md)
-* [Numpy, Pandas, & RasterFrames](numpy-pandas.md) 
-* [UDF Reference](reference.md)
-* [Release Notes](release-notes.md)
+* @ref:[Death](die.md)
+* @ref:[Description](description.md)
+* @ref:[Getting Started](getting-started.md)
+* @ref:[Raster Data I/O](raster-io.md)
+* @ref:[Vector Data](vector-data.md)
+* @ref:[Raster Processing](raster-processing.md)
+* @ref:[Numpy, Pandas, & RasterFrames](numpy-pandas.md) 
+* @ref:[UDF Reference](reference.md)
+* @ref:[Release Notes](release-notes.md)
 @@@
 
